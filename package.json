@@ -1,7 +1,22 @@
 {
     "name": "athena-mcp-server",
     "version": "0.1.0",
-    "description": "MCP Server for LiteGraph (Athena Memory)",
+    "description": "A Model Context Protocol (MCP) server bridging Athena's cognitive framework with LiteGraph memory persistence. Includes 12 tools for session management, memory operations, and semantic search.",
+    "keywords": [
+        "mcp",
+        "athena",
+        "litegraph",
+        "ai-agent",
+        "memory",
+        "semantic-search",
+        "context-protocol"
+    ],
+    "author": "Ruggero Baresi",
+    "license": "MIT",
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/ruggerobaresi/athena-mcp_local.git"
+    },
     "type": "module",
     "main": "dist/index.js",
     "scripts": {
