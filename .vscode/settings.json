@@ -1,0 +1,10 @@
+{
+  "editor.formatOnSave": true,
+  "editor.defaultFormatter": "esbenp.prettier-vscode",
+  "files.associations": {
+    "*.md": "markdown"
+  },
+  "markdown.preview.scrollEditorWithPreview": true,
+  "athena.projectRoot": "${workspaceFolder}",
+  "athena.mcpServer": "athena-litegraph"
+}
