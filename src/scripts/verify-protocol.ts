@@ -29,7 +29,8 @@ async function main() {
     const startResult = await sessionManager.startSession({
         userId: "test-user",
         projectId: "athena-verification",
-        description: "Verifying Protocol Alignment"
+        description: "Verifying Protocol Alignment",
+        path: process.cwd()
     });
     console.log(`   Session ID: ${startResult.sessionId}`);
     console.log(`   Log Path: ${startResult.logPath}`);
@@ -72,9 +73,10 @@ async function main() {
     console.log("\n3️⃣ Ending Session...");
     const endResult = await sessionManager.endSession({
         sessionId: startResult.sessionId,
-        summary: "Completed verification of Session Protocols.",
-        decisions: ["Approved Protocol 417 implementation"],
-        nextSteps: ["Deploy to production"]
+        summary: "Verification complete. Protocol 215 validated.",
+        decisions: ["Confirmed compliance with Athena-Public protocols"],
+        nextSteps: ["Deploy to production"],
+        path: process.cwd()
     });
     console.log(`   Status: ${endResult.status}`);
 

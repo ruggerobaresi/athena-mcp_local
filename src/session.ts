@@ -8,7 +8,7 @@ export interface StartSessionParams {
     userId?: string;
     projectId?: string;
     description?: string;
-    path?: string;  // Optional: Workspace root path override
+    path: string;  // Required: Workspace root path
 }
 
 export interface EndSessionParams {
@@ -17,7 +17,7 @@ export interface EndSessionParams {
     decisions?: string[];
     tasks?: string[];
     nextSteps?: string[];
-    path?: string;  // Optional: Workspace root path override
+    path: string;  // Required: Workspace root path
 }
 
 export class SessionManager {
@@ -31,10 +31,10 @@ export class SessionManager {
         this.git = new GitManager(projectRoot);
     }
 
-    async startSession(params: StartSessionParams = {}) {
+    async startSession(params: StartSessionParams) {
         const sessionId = uuidv4();
         const startTime = new Date().toISOString();
-        const root = params.path || this.projectRoot;
+        const root = params.path;
 
         // 1. Load Project State (Living Spec)
         const projectState = await this.loadProjectState(root);
@@ -154,7 +154,7 @@ export class SessionManager {
 
     async endSession(params: EndSessionParams) {
         const endTime = new Date().toISOString();
-        const root = params.path || this.projectRoot;
+        const root = params.path;
 
         const fs = await import('fs/promises');
         const path = await import('path');
@@ -190,7 +190,7 @@ export class SessionManager {
         }
 
         // 2. Canonical Memory Sync (Protocol 215)
-        await this.syncToCanonical(params.sessionId, params.summary, endTime);
+        await this.syncToCanonical(params.sessionId, params.summary, endTime, root);
 
         // 3. Store Decisions
         if (params.decisions && params.decisions.length > 0) {
@@ -272,10 +272,10 @@ export class SessionManager {
         };
     }
 
-    private async syncToCanonical(sessionId: string, summary: string, date: string) {
+    private async syncToCanonical(sessionId: string, summary: string, date: string, root: string) {
         const fs = await import('fs/promises');
         const path = await import('path');
-        const canonicalPath = path.join(this.projectRoot, '.context', 'CANONICAL.md');
+        const canonicalPath = path.join(root, '.context', 'CANONICAL.md');
 
         // Ensure path exists or fallback
         let targetPath = canonicalPath;
@@ -283,7 +283,7 @@ export class SessionManager {
             await fs.access(canonicalPath);
         } catch {
             // Fallback
-            targetPath = path.join(this.projectRoot, 'Athena-Public', '.context', 'CANONICAL.md');
+            targetPath = path.join(root, 'Athena-Public', '.context', 'CANONICAL.md');
         }
 
         try {

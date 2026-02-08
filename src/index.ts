@@ -47,14 +47,15 @@ server.tool(
     "athena_start_session",
     "Start a new Athena session and retrieve recent context.",
     {
+        path: z.string().describe("Absolute path to the project root (REQUIRED)"),
         userId: z.string().optional().describe("User ID"),
         projectId: z.string().optional().describe("Project ID"),
         description: z.string().optional().describe("Session description"),
-        path: z.string().optional().describe("Workspace root path override")
     },
     async (params) => {
         try {
-            const result = await sessionManager.startSession(params);
+            if (!params.path) throw new Error("Path is required");
+            const result = await sessionManager.startSession(params as any); // cast needed due to strict Zod inference? No, z.string() matches sessionManager param if updated.
             return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
         } catch (error: any) {
             const errorMsg = error instanceof Error ? error.message + '\n' + error.stack : JSON.stringify(error);
@@ -72,9 +73,9 @@ server.tool(
     {
         sessionId: z.string().describe("Session UUID"),
         summary: z.string().describe("Summary of the session"),
+        path: z.string().describe("Absolute path to the project root (REQUIRED)"),
         decisions: z.array(z.string()).optional().describe("List of decisions made"),
         nextSteps: z.array(z.string()).optional().describe("List of next steps/tasks identified"),
-        path: z.string().optional().describe("Workspace root path override")
     },
     async (params) => {
         try {
@@ -94,7 +95,7 @@ server.tool(
     {
         summary: z.string().describe("What just happened?"),
         bullets: z.array(z.string()).optional().describe("Key details or file changes"),
-        path: z.string().optional().describe("Workspace root path override")
+        path: z.string().optional().describe("Absolute path to the project root (Recommended)")
     },
     async (params) => {
         try {
@@ -134,12 +135,12 @@ server.tool(
     "athena_init",
     "Initialize an Athena workspace with standard directory structure and templates.",
     {
-        target: z.string().optional().describe("Target directory (defaults to project root)"),
+        path: z.string().describe("Target directory (Defaults to CWD if omitted, but explicit path recommended)"),
         ide: z.enum(["vscode", "cursor", "gemini", "antigravity"]).optional().describe("IDE-specific configuration to generate")
     },
     async (params) => {
         try {
-            const result = await initTool.execute(params);
+            const result = await initTool.execute({ ...params, target: params.path });
             return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
         } catch (e: any) {
             return { content: [{ type: "text", text: `Init failed: ${e.message}` }] };

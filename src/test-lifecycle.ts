@@ -28,7 +28,8 @@ async function testLifecycle() {
         console.log("\n1. Starting Session...");
         const startResult = await sessionManager.startSession({
             description: "Automated Lifecycle Test Session",
-            projectId: "test-project-123"
+            projectId: "test-project-123",
+            path: process.cwd()
         });
         console.log("Session Started:", startResult.sessionId);
         console.log("Context Retrieved:", startResult.recentContext.length, "items");
@@ -52,15 +53,13 @@ async function testLifecycle() {
         console.log("\n3. Ending Session...");
         const endResult = await sessionManager.endSession({
             sessionId: startResult.sessionId,
-            summary: "This was a successful test of the Athena automation logic.",
-            decisions: [
-                "Implemented SessionManager",
-                "Verified via test script"
-            ],
+            summary: "Lifecycle test complete.",
+            decisions: ["Tested Start", "Tested Quicksave"],
             nextSteps: [
-                "Migrate to Docker",
-                "Integrate with Agent"
-            ]
+                "Verify Log Exists",
+                "Verify Node Graph"
+            ],
+            path: process.cwd()
         });
         console.log("Session Ended:", endResult.status);
 
@@ -79,7 +78,8 @@ async function testLifecycle() {
         // startSession internally calls searchNodes("Label=Session", 5) now.
         const session2Result = await sessionManager.startSession({
             description: "Second Session to test context",
-            projectId: "test-project-123"
+            projectId: "test-project-123",
+            path: process.cwd()
         });
         console.log("Context Retrieved for Session 2:", session2Result.recentContext.length, "items");
 

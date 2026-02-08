@@ -77,7 +77,8 @@ async function runTests() {
         // Start
         const session = await sessionManager.startSession({
             projectId: "integration-test",
-            description: "Testing Session Manager"
+            description: "Testing Session Manager",
+            path: process.cwd()
         });
         console.log(`Session Started: ${session.sessionId}`);
 
@@ -95,7 +96,8 @@ async function runTests() {
             sessionId: session.sessionId,
             summary: "Integration test completed successfully.",
             decisions: ["Validated all tools"],
-            nextSteps: ["Cleanup"]
+            nextSteps: ["Cleanup"],
+            path: process.cwd()
         });
         console.log("Session Ended:", endResult);
         console.log("✅ Session Lifecycle Passed");

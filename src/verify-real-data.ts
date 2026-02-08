@@ -1,7 +1,19 @@
 
 import { LiteGraphClient } from './litegraph-client.js';
+import { SessionManager } from "./session.js";
+import dotenv from 'dotenv';
 import { EmbeddingService } from './services/EmbeddingService.js';
 import { ContextService } from './context-service.js';
+
+// Mock Client for offline verification
+class MockLiteGraphClient {
+    async getNode(id: string) { return null; }
+    async storeNode(node: any) { console.log(`[MockDB] Storing Node: ${node.type} (${node.id})`); return "stored"; }
+    async storeRelationship(rel: any) { console.log(`[MockDB] Storing Rel: ${rel.type}`); return "stored"; }
+    async searchNodes(query: string) { return []; }
+    async searchVectors(vector: any) { return []; }
+    async connect() { console.log("[MockDB] Connected."); return true; } // Added connect method for mock
+}
 
 // Configuration (Mirroring index.ts)
 const CONFIG = {
@@ -11,6 +23,10 @@ const CONFIG = {
     accessKey: process.env.LITEGRAPH_ACCESS_KEY || "default-key"
 };
 
+// Toggle to use Mock or Real
+const USE_MOCK = true;
+
+
 async function verifyRealData() {
     console.log("=== Athena Phase 3: Real Data Verification ===");
     console.log(`Target: LiteGraph @ ${CONFIG.endpoint}`);
@@ -18,7 +34,7 @@ async function verifyRealData() {
 
     // 1. Setup Services
     const embeddingService = new EmbeddingService('bge-m3');
-    const db = new LiteGraphClient(CONFIG, embeddingService);
+    const db = USE_MOCK ? new MockLiteGraphClient() as any : new LiteGraphClient(CONFIG, embeddingService);
 
     // 2. Connectivity Check
     try {
@@ -53,9 +69,27 @@ async function verifyRealData() {
     await new Promise(r => setTimeout(r, 1000));
 
     // 4. Verify Embedding Generation (by inspecting the stored node if possible, or just searching)
+    // 4. Session Managment
+    console.log("\n4. Testing Session Manager...");
+    const sessionManager = new SessionManager(db, process.cwd()); // Changed client to db
+    const session = await sessionManager.startSession({
+        userId: "test-user",
+        description: "Integration Test Session",
+        path: process.cwd()
+    });
+    console.log("Session started:", session.sessionId);
+
+    await sessionManager.endSession({
+        sessionId: session.sessionId,
+        summary: "Verified all core functions successfully.",
+        path: process.cwd()
+    });
+    console.log("Session ended.");
+
+    // 5. Verify Embedding Generation (by inspecting the stored node if possible, or just searching)
     // We'll jump straight to search to verify the loop.
 
-    // 5. Semantic Search
+    // 6. Semantic Search
     const queries = [
         "What is the energy source of the cell?", // Semantic match
         "mitochondria", // Keyword/Semantic match

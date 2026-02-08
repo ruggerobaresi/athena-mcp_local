@@ -23,7 +23,8 @@ async function testCompliance() {
         console.log("1. Starting Session...");
         const startResult = await sessionManager.startSession({
             description: "Protocol Compliance Test",
-            projectId: "compliance-check"
+            projectId: "compliance-check",
+            path: process.cwd()
         });
 
         console.log(`Session ID: ${startResult.sessionId}`);
@@ -51,9 +52,10 @@ async function testCompliance() {
         console.log("\n2. Ending Session...");
         await sessionManager.endSession({
             sessionId: startResult.sessionId,
-            summary: "Verified compliance fixes.",
-            decisions: ["Implemented Quicksave"],
-            nextSteps: ["Verify Log Content"]
+            summary: "Compliance check passed.",
+            decisions: ["Verified Log Format", "Verified Tagging"],
+            nextSteps: ["Verify Log Content"],
+            path: process.cwd()
         });
 
         // Verify Log Content matches

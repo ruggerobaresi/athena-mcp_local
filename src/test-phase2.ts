@@ -61,7 +61,7 @@ async function runTest() {
         const db = new MockLiteGraphClient() as any;
         const sessionManager = new SessionManager(db, testRoot);
 
-        const sessionResult = await sessionManager.startSession({ description: "Test Session" });
+        const sessionResult = await sessionManager.startSession({ description: "Test Session", path: process.cwd() });
         assert.strictEqual(sessionResult.coreIdentity, '# Test Core Identity', 'Session should have injected Core Identity');
         console.log("✅ SessionManager injected Core Identity");
 
