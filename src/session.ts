@@ -3,6 +3,7 @@
 import { LiteGraphClient } from "./litegraph-client.js";
 import { v4 as uuidv4 } from 'uuid';
 import { GitManager } from "./git-manager.js";
+import { SessionState } from "./session-state.js";
 
 export interface StartSessionParams {
     userId?: string;
@@ -24,11 +25,13 @@ export class SessionManager {
     private db: LiteGraphClient;
     private projectRoot: string;
     private git: GitManager;
+    private sessionState: SessionState;
 
     constructor(db: LiteGraphClient, projectRoot: string) {
         this.db = db;
         this.projectRoot = projectRoot;
         this.git = new GitManager(projectRoot);
+        this.sessionState = SessionState.getInstance();
     }
 
     async startSession(params: StartSessionParams) {
@@ -73,6 +76,16 @@ export class SessionManager {
             },
             // Categorization Fix: Added #start, #workflow tags
             labels: ["Session", "Athena", "#start", "#workflow", "#automation"]
+        });
+
+        // Register in session state (Memory Cache)
+        this.sessionState.setActiveSession({
+            id: sessionId,
+            userId: params.userId,
+            projectId: params.projectId,
+            startTime: startTime,
+            lastActivity: startTime,
+            logPath: logPath
         });
 
         // Retrieve context: last 5 sessions
@@ -181,6 +194,9 @@ export class SessionManager {
             },
             labels: ["Session", "Athena", "Archived", "#end", "#workflow"]
         });
+
+        // Remove from session state
+        this.sessionState.removeSession(params.sessionId);
 
         if (logPath) {
             await this.appendToLog(logPath, `\n## Summary\n${params.summary}\n`);

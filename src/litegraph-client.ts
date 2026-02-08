@@ -81,6 +81,7 @@ export class LiteGraphClient {
             Ordering: 'CreatedDescending',
             MaxResults: limit,
             Skip: 0,
+            IncludeData: true,  // Include full node Data in results
             Expr: null
         };
 
@@ -90,10 +91,17 @@ export class LiteGraphClient {
             searchReq.Labels = [labelMatch[1]];
         }
 
-        // Check for "Name=Value" or "type=Value" pattern (alias for Name)
+        // Check for "Name=Value" or "type=Value" pattern
+        // For type=Value, search by Labels (since type is stored as first label)
         const nameMatch = query.match(/^(Name|type)=(.+)$/i);
         if (nameMatch) {
-            searchReq.Name = nameMatch[2];
+            const [, key, value] = nameMatch;
+            if (key.toLowerCase() === 'type') {
+                // Type is stored as first element in Labels array
+                searchReq.Labels = [value];
+            } else {
+                searchReq.Name = value;
+            }
         } else if (query && !labelMatch) {
             // For other properties, or if query is not Name=... or Label=...:
             // If query matches "Prop=Value", put it in Expr
@@ -178,15 +186,22 @@ export class LiteGraphClient {
             }
         }
 
+        // Build Labels array: [type, ...additional labels]
+        // Type is stored as first element for label-based filtering
+        const nodeType = node.type || node.label || 'Node';
+        const additionalLabels = node.labels || [];
+        const labels = [nodeType, ...additionalLabels.filter((l: string) => l !== nodeType)];
+
         const litegraphNode = {
             GUID: node.id || crypto.randomUUID(),
             GraphGUID: this.config.graphGuid,
-            Name: node.label || "Node",
+            Name: nodeType,  // Use type as Name for consistency
+            Labels: labels,  // Type as first label for search filtering
+            Tags: {},
             Data: {
                 ...node.properties,
                 _source: 'athena-mcp'
             },
-            Labels: node.labels || [],
             Vectors: vector ? [{
                 Vectors: vector,
                 Model: this.embeddingService?.getModelName() || "unknown",

@@ -5,27 +5,33 @@ import * as path from 'path';
 import { MOUNTS, PROTOCOLS } from '../constants.js';
 import { SessionManager } from '../session.js';
 import { LiteGraphClient } from '../litegraph-client.js';
+import { SessionState } from '../session-state.js';
 
 export class QuicksaveTool {
+    private sessionState: SessionState;
+
     constructor(
         private sessionManager: SessionManager,
         private db: LiteGraphClient,
         private projectRoot: string
-    ) { }
+    ) {
+        this.sessionState = SessionState.getInstance();
+    }
 
     async execute(params: { summary: string; bullets?: string[]; path?: string }) {
         const { summary, bullets = [], path: pathOverride } = params;
         const root = pathOverride || this.projectRoot;
-        const sessionId = "current"; // Ideally we get this from context or find the active session
-        // For now, we'll try to find the active session via sessionManager helper or DB
 
-        // findActiveSessionID would look for a Session node with status: "active"
-        const activeSession = await this.findActiveSession();
+        // Get active session from memory (fast and reliable)
+        const activeSession = this.sessionState.getActiveSession();
         if (!activeSession) {
             throw new Error("No active session found. Please start a session first.");
         }
 
-        const logPath = activeSession.properties.logFile;
+        // Update activity timestamp
+        this.sessionState.updateActivity(activeSession.id);
+
+        const logPath = activeSession.logPath;
 
         // --- Compliance Checks ---
 
@@ -80,15 +86,7 @@ export class QuicksaveTool {
     }
 
     private async findActiveSession() {
-        // Query DB for active session
-        const results = await this.db.searchNodes("status=active", 1);
-        // Filter by type Session just in case
-        const session = results.find((n: any) => n.Labels?.includes("Session") || n.id); // SearchNodes returns simplified objects sometimes?
-        // Let's assume searchNodes returns array of nodes.
-        if (session && (session.labels?.includes("Session") || session.Labels?.includes("Session"))) { // Case sensitivity check
-            return session;
-        }
-        // Fallback: try to find any session created recently? No, strictly active.
+        // Obsolete: Replaced by SessionState singleton
         return null;
     }
 
