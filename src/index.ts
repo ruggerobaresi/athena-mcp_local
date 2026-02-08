@@ -55,8 +55,9 @@ server.tool(
     },
     async (params) => {
         try {
+            console.error(`athena_start_session: ${JSON.stringify(params)}`);
             if (!params.path) throw new Error("Path is required");
-            const result = await sessionManager.startSession(params as any); // cast needed due to strict Zod inference? No, z.string() matches sessionManager param if updated.
+            const result = await sessionManager.startSession(params as any); // cast needed due to strict Zod inference
             return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
         } catch (error: any) {
             const errorMsg = error instanceof Error ? error.message + '\n' + error.stack : JSON.stringify(error);

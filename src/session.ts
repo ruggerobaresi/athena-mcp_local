@@ -36,21 +36,45 @@ export class SessionManager {
     }
 
     async startSession(params: StartSessionParams) {
-        let sessionId = params.sessionId || uuidv4();
-        const startTime = new Date().toISOString();
+        let sessionId = params.sessionId;
         const root = params.path;
+
+        // 0. Auto-Resumption Logic
+        if (!sessionId) {
+            const lastSessionId = await this.getLastActiveSessionId(root);
+            if (lastSessionId) {
+                console.log(`Found active session marker: ${lastSessionId}. Resuming...`);
+                sessionId = lastSessionId;
+            } else {
+                sessionId = uuidv4();
+            }
+        }
+
+        const startTime = new Date().toISOString();
         let logPath = "";
         let resumed = false;
 
         // 1. Resumption Check
-        if (params.sessionId) {
-            const existing = await this.db.getNode(params.sessionId);
+        if (params.sessionId || (sessionId && sessionId !== params.sessionId)) { // Check if we are resuming (either explicit or auto)
+            // If we auto-resumed, sessionId is set. If explicit, params.sessionId is set.
+            // Verification:
+            const targetId = sessionId!;
+
+            // Try to fetch node to confirm existence
+            const existing = await this.db.getNode(targetId);
             if (existing) {
                 logPath = existing.Data?.logFile || "";
                 resumed = true;
-                console.log(`Resuming session ${sessionId}`);
+                console.log(`Resuming session ${targetId}`);
             } else {
-                throw new Error(`Session ${params.sessionId} not found in LiteGraph.`);
+                if (params.sessionId) {
+                    // If explicit ID not found, error
+                    throw new Error(`Session ${params.sessionId} not found in LiteGraph.`);
+                }
+                // If auto-resume ID not found (graph wiped?), treat as new
+                console.warn(`Marked session ${targetId} not found in graph. Starting new.`);
+                sessionId = uuidv4();
+                resumed = false;
             }
         }
 
@@ -80,7 +104,7 @@ export class SessionManager {
 
             // 5. Store Session Node (Graph Persistence)
             await this.db.storeNode({
-                id: sessionId,
+                id: sessionId!,
                 type: "Session",
                 properties: {
                     startTime: startTime,
@@ -95,7 +119,7 @@ export class SessionManager {
         } else {
             // Update activity/status if resumed
             await this.db.storeNode({
-                id: sessionId,
+                id: sessionId!,
                 type: "Session",
                 properties: {
                     status: "active",
@@ -107,13 +131,16 @@ export class SessionManager {
 
         // Register in session state (Memory Cache)
         this.sessionState.setActiveSession({
-            id: sessionId,
+            id: sessionId!,
             userId: params.userId,
             projectId: params.projectId,
             startTime: startTime,
             lastActivity: startTime,
             logPath: logPath
         });
+
+        // PERSISTENCE: Save the active session ID
+        await this.saveSessionId(root, sessionId!);
 
         // Retrieve context: last 5 sessions
         const recentSessions = await this.db.searchNodes("Label=Session", 5);
@@ -128,9 +155,9 @@ export class SessionManager {
             }));
 
         return {
-            sessionId,
+            sessionId: sessionId!,
             startTime,
-            message: "Session started successfully.",
+            message: resumed ? "Session resumed." : "Session started.",
             recentContext: context,
             coreIdentity: await this.loadCoreIdentity(root),
             projectState,
@@ -224,6 +251,9 @@ export class SessionManager {
 
         // Remove from session state
         this.sessionState.removeSession(params.sessionId);
+
+        // PERSISTENCE: Clear the active session marker
+        await this.clearSessionId(root);
 
         if (logPath) {
             await this.appendToLog(logPath, `\n## Summary\n${params.summary}\n`);
@@ -335,6 +365,51 @@ export class SessionManager {
             await fs.appendFile(targetPath, entry, 'utf8');
         } catch (e) {
             console.warn(`Failed to sync to CANONICAL.md at ${targetPath}`, e);
+        }
+    }
+
+    // --- Persistence Methods ---
+
+    private async getSessionMarkerPath(root: string): Promise<string> {
+        const path = await import('path');
+        const fs = await import('fs/promises');
+        const contextDir = path.join(root, '.context');
+
+        try {
+            await fs.mkdir(contextDir, { recursive: true });
+        } catch (e) { }
+
+        return path.join(contextDir, '.session_marker');
+    }
+
+    private async saveSessionId(root: string, sessionId: string) {
+        const fs = await import('fs/promises');
+        const markerPath = await this.getSessionMarkerPath(root);
+        try {
+            await fs.writeFile(markerPath, sessionId, 'utf8');
+        } catch (e) {
+            console.warn("Failed to save session marker:", e);
+        }
+    }
+
+    private async getLastActiveSessionId(root: string): Promise<string | null> {
+        const fs = await import('fs/promises');
+        const markerPath = await this.getSessionMarkerPath(root);
+        try {
+            const id = await fs.readFile(markerPath, 'utf8');
+            return id.trim();
+        } catch (e) {
+            return null;
+        }
+    }
+
+    private async clearSessionId(root: string) {
+        const fs = await import('fs/promises');
+        const markerPath = await this.getSessionMarkerPath(root);
+        try {
+            await fs.unlink(markerPath);
+        } catch (e) {
+            // Ignore if already missing
         }
     }
 }
