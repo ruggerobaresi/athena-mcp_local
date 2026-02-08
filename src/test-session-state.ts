@@ -66,6 +66,18 @@ async function test() {
         console.log("Success: Quicksave failed as expected:", e.message);
     }
 
+    console.log("\nStep 6: Verify Session Resumption");
+    const resumedSession = await sessionManager.startSession({
+        path: projectRoot,
+        sessionId: session.sessionId,
+        userId: "resumed-user"
+    });
+    console.log("Session Resumed:", resumedSession.sessionId);
+    console.log("Memory State (Active):", state.getActiveSession()?.id);
+
+    const qsResumed = await quicksave.execute({ summary: "Resumed session quicksave" });
+    console.log("Quicksave after Resume:", qsResumed.status);
+
     console.log("\nVerification Complete!");
 }
 

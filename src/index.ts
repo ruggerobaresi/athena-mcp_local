@@ -51,6 +51,7 @@ server.tool(
         userId: z.string().optional().describe("User ID"),
         projectId: z.string().optional().describe("Project ID"),
         description: z.string().optional().describe("Session description"),
+        sessionId: z.string().optional().describe("Session UUID to resume"),
     },
     async (params) => {
         try {

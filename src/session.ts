@@ -9,6 +9,7 @@ export interface StartSessionParams {
     userId?: string;
     projectId?: string;
     description?: string;
+    sessionId?: string; // Optional: ID to resume
     path: string;  // Required: Workspace root path
 }
 
@@ -35,14 +36,28 @@ export class SessionManager {
     }
 
     async startSession(params: StartSessionParams) {
-        const sessionId = uuidv4();
+        let sessionId = params.sessionId || uuidv4();
         const startTime = new Date().toISOString();
         const root = params.path;
+        let logPath = "";
+        let resumed = false;
 
-        // 1. Load Project State (Living Spec)
+        // 1. Resumption Check
+        if (params.sessionId) {
+            const existing = await this.db.getNode(params.sessionId);
+            if (existing) {
+                logPath = existing.Data?.logFile || "";
+                resumed = true;
+                console.log(`Resuming session ${sessionId}`);
+            } else {
+                throw new Error(`Session ${params.sessionId} not found in LiteGraph.`);
+            }
+        }
+
+        // 2. Load Project State (Living Spec)
         const projectState = await this.loadProjectState(root);
 
-        // 2. Define Output Standards
+        // 3. Define Output Standards
         const outputStandards = `
 ## Output Standards
 - **Latency Indicator**: Append [Λ+XX] to responses relative to complexity.
@@ -50,33 +65,45 @@ export class SessionManager {
 - **Format**: valid Markdown.
 `;
 
-        // 3. Create Session Log File (Quicksave Protocol)
-        const dateStr = new Date().toISOString().split('T')[0];
-        const logFileName = `Session_${dateStr}_${sessionId}.md`;
-        const logPath = await this.ensureLogPath(logFileName, root);
+        if (!resumed) {
+            // 4. Create Session Log File (Quicksave Protocol)
+            const dateStr = new Date().toISOString().split('T')[0];
+            const logFileName = `Session_${dateStr}_${sessionId}.md`;
+            logPath = await this.ensureLogPath(logFileName, root);
 
-        await this.appendToLog(logPath, `# Session Log: ${sessionId}\n`);
-        await this.appendToLog(logPath, `**Date**: ${startTime}\n**Project**: ${params.projectId || "N/A"}\n**User**: ${params.userId || "N/A"}\n\n## Init\n- [x] Core Identity Loaded\n- [x] Session Started\n- [x] Project State Injected\n\n`);
+            await this.appendToLog(logPath, `# Session Log: ${sessionId}\n`);
+            await this.appendToLog(logPath, `**Date**: ${startTime}\n**Project**: ${params.projectId || "N/A"}\n**User**: ${params.userId || "N/A"}\n\n## Init\n- [x] Core Identity Loaded\n- [x] Session Started\n- [x] Project State Injected\n\n`);
 
-        if (projectState) {
-            await this.appendToLog(logPath, `### Project State Snapshot\n${projectState.substring(0, 500)}...\n\n`);
+            if (projectState) {
+                await this.appendToLog(logPath, `### Project State Snapshot\n${projectState.substring(0, 500)}...\n\n`);
+            }
+
+            // 5. Store Session Node (Graph Persistence)
+            await this.db.storeNode({
+                id: sessionId,
+                type: "Session",
+                properties: {
+                    startTime: startTime,
+                    status: "active",
+                    description: params.description || "Athena Session",
+                    userId: params.userId,
+                    projectId: params.projectId,
+                    logFile: logPath
+                },
+                labels: ["Session", "Athena", "#start", "#workflow", "#automation"]
+            });
+        } else {
+            // Update activity/status if resumed
+            await this.db.storeNode({
+                id: sessionId,
+                type: "Session",
+                properties: {
+                    status: "active",
+                    lastResumed: startTime
+                }
+            });
+            await this.appendToLog(logPath, `\n### Session Resumed\n**Date**: ${startTime}\n`);
         }
-
-        // 4. Store Session Node (Graph Persistence)
-        await this.db.storeNode({
-            id: sessionId,
-            type: "Session",
-            properties: {
-                startTime: startTime,
-                status: "active",
-                description: params.description || "Athena Session",
-                userId: params.userId,
-                projectId: params.projectId,
-                logFile: logPath
-            },
-            // Categorization Fix: Added #start, #workflow tags
-            labels: ["Session", "Athena", "#start", "#workflow", "#automation"]
-        });
 
         // Register in session state (Memory Cache)
         this.sessionState.setActiveSession({
