@@ -1,0 +1,32 @@
+services:
+  athena:
+    build: .
+    image: athena-mcp:local
+    container_name: athena_mcp
+    environment:
+      - LITEGRAPH_ENDPOINT=http://litegraph:8701
+      - LITEGRAPH_TENANT_GUID=00000000-0000-0000-0000-000000000000
+      - LITEGRAPH_GRAPH_GUID=411e74de-0000-0000-0000-000000000000
+      - LITEGRAPH_ACCESS_KEY=default
+    volumes:
+      - ./data/.context:/app/.context
+      - ./data/litegraph:/app/data
+    networks:
+      - athena-net
+    stdin_open: true # -i
+    tty: true # -t
+
+  litegraph:
+    image: litegraph-local:latest
+    container_name: litegraph_db
+    ports:
+      - "8701:8701"
+    volumes:
+      - ./data/litegraph-db/litegraph.db:/app/litegraph.db
+      - ./data/litegraph-db/litegraph.json:/app/litegraph.json
+    networks:
+      - athena-net
+
+networks:
+  athena-net:
+    driver: bridge
