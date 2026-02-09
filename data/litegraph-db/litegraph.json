@@ -1,0 +1,26 @@
+{
+  "Rest": {
+    "Hostname": "*",
+    "Port": 8701,
+    "Ssl": {
+      "Enable": false
+    },
+    "Debug": {
+      "Requests": false,
+      "Responses": false,
+      "Exceptions": true
+    }
+  },
+  "LiteGraph": {
+    "GraphRepositoryFilename": "litegraph.db",
+    "AdminBearerToken": "default",
+    "InMemory": false
+  },
+  "Logging": {
+    "Servers": [],
+    "ConsoleLogging": true,
+    "EnableColors": true,
+    "LogFilename": "litegraph.log",
+    "LogDirectory": "logs/"
+  }
+}
