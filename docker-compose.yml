@@ -9,8 +9,10 @@ services:
       - LITEGRAPH_GRAPH_GUID=411e74de-0000-0000-0000-000000000000
       - LITEGRAPH_ACCESS_KEY=default
     volumes:
-      - ./data/.context:/app/.context
+      - /Users/lorenzorastelli:/Users/lorenzorastelli
       - ./data/litegraph:/app/data
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     networks:
       - athena-net
     stdin_open: true # -i
@@ -24,6 +26,17 @@ services:
     volumes:
       - ./data/litegraph-db/litegraph.db:/app/litegraph.db
       - ./data/litegraph-db/litegraph.json:/app/litegraph.json
+    networks:
+      - athena-net
+
+  falkordb:
+    image: falkordb/falkordb:edge
+    container_name: falkordb
+    ports:
+      - "6379:6379"
+      - "3000:3000"
+    volumes:
+      - ./data/falkordb:/data
     networks:
       - athena-net
 

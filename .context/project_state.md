@@ -3,9 +3,9 @@
 **Goal**: Implement and verify Athena v8.2 protocols (Session Management, Exocortex, Git Integration) in a TypeScript/Node.js environment.
 
 ## Current Focus
-- Verifying Session Protocols (Triple-Lock, Promise Gate).
-- Ensuring robust Git harvesting and worktree management.
-- Integrating with LiteGraph for memory persistence.
+- **Session Management**: Verified Triple-Lock & Promise Gate.
+- **Tooling**: Developing `athena_init` and `athena_check` automation.
+- **Git Integration**: Robust harvesting and worktree management.
 
 ## Architectural Notes
 - Server: Node.js/TypeScript (MCP Protocol)

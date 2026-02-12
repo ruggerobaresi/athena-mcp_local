@@ -4,6 +4,8 @@ import { LiteGraphClient } from "./litegraph-client.js";
 import { v4 as uuidv4 } from 'uuid';
 import { GitManager } from "./git-manager.js";
 import { SessionState } from "./session-state.js";
+import { FalkorDBService } from "./services/FalkorDBService.js";
+import { EmbeddingService } from "./services/EmbeddingService.js";
 
 export interface StartSessionParams {
     userId?: string;
@@ -27,12 +29,21 @@ export class SessionManager {
     private projectRoot: string;
     private git: GitManager;
     private sessionState: SessionState;
+    private falkorDB?: FalkorDBService;
+    private embeddings?: EmbeddingService;
 
-    constructor(db: LiteGraphClient, projectRoot: string) {
+    constructor(
+        db: LiteGraphClient,
+        projectRoot: string,
+        falkorDB?: FalkorDBService,
+        embeddings?: EmbeddingService
+    ) {
         this.db = db;
         this.projectRoot = projectRoot;
         this.git = new GitManager(projectRoot);
         this.sessionState = SessionState.getInstance();
+        this.falkorDB = falkorDB;
+        this.embeddings = embeddings;
     }
 
     async startSession(params: StartSessionParams) {
@@ -136,7 +147,8 @@ export class SessionManager {
             projectId: params.projectId,
             startTime: startTime,
             lastActivity: startTime,
-            logPath: logPath
+            logPath: logPath,
+            path: root
         });
 
         // PERSISTENCE: Save the active session ID
@@ -197,12 +209,34 @@ export class SessionManager {
         return path.join(logsDir, filename);
     }
 
-    private async appendToLog(filePath: string, content: string) {
+    private async appendToLog(filePath: string, content: string, index: boolean = false) {
         const fs = await import('fs/promises');
         try {
             await fs.appendFile(filePath, content, 'utf8');
+
+            if (index && this.falkorDB && this.embeddings) {
+                // Background indexing
+                this.indexContent(content, filePath).catch(e => console.error("Indexing failed:", e));
+            }
         } catch (e) {
             console.error(`Failed to append to log ${filePath}:`, e);
+        }
+    }
+
+    private async indexContent(text: string, source: string) {
+        if (!this.falkorDB || !this.embeddings) return;
+
+        // chunk logic
+        const chunks = await this.embeddings.splitText(text);
+        for (const chunk of chunks) {
+            const vector = await this.embeddings.getEmbedding(chunk);
+            if (vector) {
+                const metadata = {
+                    source: source,
+                    sessionId: this.sessionState.getActiveSession()?.id
+                };
+                await this.falkorDB.storeChunk(chunk, vector, metadata);
+            }
         }
     }
 
@@ -256,7 +290,7 @@ export class SessionManager {
         await this.clearSessionId(root);
 
         if (logPath) {
-            await this.appendToLog(logPath, `\n## Summary\n${params.summary}\n`);
+            await this.appendToLog(logPath, `\n## Summary\n${params.summary}\n`, true);
             // Session Checkpoint Format
             const checkpoint = `\n[[ S.${params.sessionId.substring(0, 8)} | ${new Date().toISOString()} | STATUS: CLOSED ]]\n`;
             await this.appendToLog(logPath, checkpoint);
@@ -281,7 +315,7 @@ export class SessionManager {
                     labels: ["Decision", "Athena", "#decision"]
                 });
 
-                if (logPath) await this.appendToLog(logPath, `- ${decisionText} (ID: ${decisionId})\n`);
+                if (logPath) await this.appendToLog(logPath, `- ${decisionText} (ID: ${decisionId})\n`, true);
 
                 // Link Session -> Decision
                 await this.db.storeRelationship({
@@ -310,7 +344,7 @@ export class SessionManager {
                     labels: ["Task", "Athena", "NextStep", "#workflow"]
                 });
 
-                if (logPath) await this.appendToLog(logPath, `- [ ] ${stepText} (ID: ${stepId})\n`);
+                if (logPath) await this.appendToLog(logPath, `- [ ] ${stepText} (ID: ${stepId})\n`, true);
 
                 // Link Session -> Task
                 await this.db.storeRelationship({

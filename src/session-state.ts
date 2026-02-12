@@ -6,6 +6,7 @@ export interface ActiveSession {
     startTime: string;
     lastActivity: string;
     logPath: string;
+    path: string; // Workspace root path
 }
 
 export class SessionState {
