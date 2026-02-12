@@ -13,8 +13,10 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { z } from "zod";
 import { LiteGraphClient } from "./litegraph-client.js";
 import { SessionManager } from "./session.js";
+import { SessionState } from "./session-state.js";
 
 import { EmbeddingService } from "./services/EmbeddingService.js";
+import { FalkorDBService } from "./services/FalkorDBService.js";
 import { ContextService } from "./context-service.js"; // Restore missing import
 import { InitTool } from "./tools/init.js";
 import { CheckTool } from "./tools/check.js";
@@ -27,12 +29,14 @@ const CONFIG = {
     accessKey: process.env.LITEGRAPH_ACCESS_KEY || "default-key"
 };
 
-// Use bge-m3 as found in user environment
-const embeddingService = new EmbeddingService('bge-m3');
+// Use mxbai-embed-large as standard
+const embeddingService = new EmbeddingService('mxbai-embed-large');
+const falkorDBService = new FalkorDBService(process.env.FALKORDB_URL || 'redis://localhost:6379');
+
 const db = new LiteGraphClient(CONFIG, embeddingService);
 // Use process.cwd() as the default project root, but allow override via env var
 const projectRoot = process.env.PROJECT_ROOT || process.cwd();
-const sessionManager = new SessionManager(db, projectRoot);
+const sessionManager = new SessionManager(db, projectRoot, falkorDBService, embeddingService);
 const contextService = new ContextService(projectRoot);
 
 // Create MCP Server
@@ -118,7 +122,19 @@ server.tool(
         target: z.string().optional().describe("Workspace root path override")
     },
     async ({ path: memoryPath, target }) => {
-        const root = target || projectRoot;
+        let root = target;
+
+        // Dynamic path resolution: Use active session path if available
+        if (!root) {
+            const sessionState = SessionState.getInstance();
+            const activeSession = sessionState.getActiveSession();
+            if (activeSession && activeSession.path) {
+                root = activeSession.path;
+            }
+        }
+
+        root = root || projectRoot;
+
         const content = await contextService.readMemory(memoryPath, root);
         if (content) {
             return { content: [{ type: "text", text: content }] };
@@ -212,16 +228,14 @@ server.tool(
             try {
                 const vector = await embeddingService.getEmbedding(query);
                 if (vector) {
-                    // Assuming LiteGraphClient exposes searchVectors (we verified this in Phase 3 tasks)
-                    // Note: SDK types might need update if we are extending client strictly, but JS allows it.
-                    // We added searchVectors to LiteGraphClient class.
-                    const vectorNodes = await db.searchVectors(vector, limit);
+                    // Use FalkorDB RAG Search
+                    const vectorNodes = await falkorDBService.searchSimilar(vector, limit);
                     // Map to uniform result structure
                     const mapped = vectorNodes.map((n: any) => ({
-                        id: n.GUID || n.id, // handle GUID vs id
-                        name: n.Name || n.Data?.name || "Unknown",
-                        score: n.Score || 0.8, // simplified scoring if not present
-                        type: n.Data?.type || "Unknown",
+                        id: n.source || "unknown", // Source contains file path or ID
+                        name: n.content.substring(0, 50) + "...",
+                        score: n.score || 0.8,
+                        type: "Chunk",
                         source: "vector"
                     }));
                     results = [...results, ...mapped];
@@ -305,8 +319,6 @@ server.tool(
     async ({ target }) => {
         const fs = await import('fs/promises');
         const path = await import('path');
-        // Removed glob import to avoid type issues and dependency checks, strictly using recursive walk
-        // const glob = (await import('glob')).glob; 
 
         // Simple recursive walk 
         async function getFiles(dir: string): Promise<string[]> {
@@ -321,7 +333,16 @@ server.tool(
             } catch (e) { return []; }
         }
 
-        const root = target || projectRoot;
+        let root = target;
+        if (!root) {
+            const sessionState = SessionState.getInstance();
+            const activeSession = sessionState.getActiveSession();
+            if (activeSession && activeSession.path) {
+                root = activeSession.path;
+            }
+        }
+        root = root || projectRoot;
+
         const dirs = ['.framework', '.context'].map(d => path.join(root, d));
         let allTags = new Set<string>();
 
